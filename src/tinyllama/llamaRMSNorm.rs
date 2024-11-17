@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 
+use anyhow::Ok;
 use tch::nn;
 use tch::nn::Init;
 use tch::nn::LinearConfig;
@@ -18,7 +19,7 @@ struct LlamaRMSNorm {
 unsafe impl Send for LlamaRMSNorm {}
 
 fn llamaRMSNorm(vs: &nn::Path, hidden_size: i64, eps: f64) -> LlamaRMSNorm {
-    let w: Tensor = vs.var("layernorm", &[2048], Init::Const(1.0));
+    let w: Tensor = vs.var("weight", &[2048], Init::Const(1.0));
     LlamaRMSNorm { eps, weight: w }
 }
 
@@ -36,14 +37,36 @@ impl ModuleT for LlamaRMSNorm {
 }
 
 #[test]
-fn load_LlamaRMSNorm() -> Result<(), Box<dyn std::error::Error>> {
+fn _load_LlamaRMSNorm() -> Result<(), anyhow::Error> {
     let mut vs = VarStore::new(tch::Device::cuda_if_available());
 
-    let llama_rms_norm = llamaRMSNorm(&vs.root(), 2048, 1e-12);
-    let weight_file = "input_layernorm.safetensors";
+    let llama_rms_norm_path = &vs.root() / "layernorm";
+    let llama_rms_norm = llamaRMSNorm(&llama_rms_norm_path, 2048, 1e-12);
+    let weight_file = "layernorm.safetensors";
     vs.load(weight_file)?;
 
     llama_rms_norm.weight.i(..5).print();
 
     Ok(())
 }
+
+#[test]
+fn load_LlamaRMSNorm() -> Result<(), anyhow::Error> {
+    let mut vs = VarStore::new(tch::Device::cuda_if_available());
+
+    let llama_rms_norm_path = &vs.root() / "model" / "layers" / "0" / "input_layernorm";
+    let llama_rms_norm = llamaRMSNorm(&llama_rms_norm_path, 2048, 1e-12);
+    let weight_file = "model.safetensors";
+    vs.load(weight_file)?;
+
+    llama_rms_norm.weight.i(..2).print();
+
+    // 遍历 VarStore 中的所有变量
+    for (name, tensor) in vs.variables() {
+        println!("Variable name: {}", name);
+        // println!("Variable values:\n{}", tensor);
+    }
+
+    Ok(())
+}
+

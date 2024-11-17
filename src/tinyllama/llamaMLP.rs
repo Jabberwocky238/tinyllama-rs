@@ -24,7 +24,6 @@ struct LlamaMLP {
 }
 
 fn llamaMLP(vs: &nn::Path, c: LlamaConfig) -> LlamaMLP {
-    let vs = vs.borrow();
     let linear_conf = LinearConfig {
         bias: false,
         ..Default::default()
@@ -101,8 +100,9 @@ fn load_LlamaMLP() -> Result<(), Box<dyn std::error::Error>> {
         i_s: 5632,
         pretraining_tp: 1,
     };
-    let llama_mlp = llamaMLP(&vs.root(), llama_config);
-    let weight_file = "mlp.safetensors";
+    let llama_mlp_path = &vs.root() / "model.layers.0.mlp";
+    let llama_mlp = llamaMLP(&llama_mlp_path, llama_config);
+    let weight_file = "model.safetensors";
     vs.load(weight_file)?;
 
     llama_mlp.gate_proj.ws.i((0, ..5)).print();
