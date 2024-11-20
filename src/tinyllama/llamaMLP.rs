@@ -8,12 +8,9 @@ use tch::vision::resnet::resnet18;
 use tch::IndexOp;
 use tch::Tensor;
 
-#[derive(Debug, Clone, Copy)]
-struct LlamaConfig {
-    pub h_s: i64, // hidden_size
-    pub i_s: i64, // intermediate_size
-    pub pretraining_tp: i64,
-}
+
+
+use super::llamaConfig::LlamaConfig;
 
 #[derive(Debug)]
 struct LlamaMLP {
@@ -28,9 +25,9 @@ fn llamaMLP(vs: &nn::Path, c: LlamaConfig) -> LlamaMLP {
         bias: false,
         ..Default::default()
     };
-    let gate_proj = nn::linear(vs / "gate_proj", c.h_s, c.i_s, linear_conf);
-    let up_proj = nn::linear(vs / "up_proj", c.h_s, c.i_s, linear_conf);
-    let down_proj = nn::linear(vs / "down_proj", c.i_s, c.h_s, linear_conf);
+    let gate_proj = nn::linear(vs / "gate_proj", c.hidden_size, c.intermediate_size, linear_conf);
+    let up_proj = nn::linear(vs / "up_proj", c.hidden_size, c.intermediate_size, linear_conf);
+    let down_proj = nn::linear(vs / "down_proj", c.intermediate_size, c.hidden_size, linear_conf);
     LlamaMLP {
         gate_proj,
         up_proj,
@@ -45,7 +42,7 @@ impl ModuleT for LlamaMLP {
         let kind = xs.kind();
 
         if self.config.pretraining_tp > 1 {
-            let slice = self.config.i_s / self.config.pretraining_tp;
+            let slice = self.config.intermediate_size / self.config.pretraining_tp;
             let gate_proj_slices = self.gate_proj.ws.split(slice, 0);
             let up_proj_slices = self.up_proj.ws.split(slice, 0);
             let down_proj_slices = self.down_proj.ws.split(slice, 1);
@@ -94,10 +91,11 @@ impl ModuleT for LlamaMLP {
 #[test]
 fn load_LlamaMLP() -> Result<(), Box<dyn std::error::Error>> {
     let mut vs = VarStore::new(tch::Device::cuda_if_available());
-
-    let llama_config = LlamaConfig {
-        h_s: 2048,
-        i_s: 5632,
+    
+    use crate::llamaConfigM;
+    let llama_config = llamaConfigM! {
+        hidden_size: 2048,
+        intermediate_size: 5632,
         pretraining_tp: 1,
     };
     let llama_mlp_path = &vs.root() / "model.layers.0.mlp";
